@@ -93,6 +93,7 @@ import { selectAllClaims, selectFilters, selectFilteredClaims, selectClaim, setF
                 <td mat-cell *matCellDef="let claim">
                   <strong>{{ claim.id }}</strong>
                   <small>{{ claim.policyNo }}</small>
+                  <small class="batch-ref">基线批次 {{ claim.baselineBatchNo || '—' }}</small>
                 </td>
               </ng-container>
               <ng-container matColumnDef="insured">
@@ -152,6 +153,7 @@ import { selectAllClaims, selectFilters, selectFilteredClaims, selectClaim, setF
     table { width: 100%; min-width: 760px; }
     td strong, td small { display: block; }
     td small { margin-top: 4px; color: #7b8790; }
+    td .batch-ref { color: #175866; }
     .risk-panel { align-self: start; }
     .rule-list { padding: 12px 16px; }
     .rule-list div { display: flex; justify-content: space-between; gap: 8px; padding: 11px 0; border-bottom: 1px solid #edf0f2; font-size: 12px; }

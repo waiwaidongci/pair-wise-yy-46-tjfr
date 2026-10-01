@@ -25,10 +25,21 @@ import { StatusChipComponent } from '../shared/status-chip.component'
         <div>
           <p class="eyebrow">RESERVE APPROVAL / 准备金审批</p>
           <h1>多级会签与赔付方案比较</h1>
-          <p class="muted">按金额、科目和风险阈值逐级审批；退回必须说明补充材料。</p>
+          <p class="muted">按金额、科目和风险阈值逐级审批；批次变更后已完成会签立即失效，从首个受影响档位重签。</p>
         </div>
-        <span class="reserve">申请准备金 {{ claim.reserve | currency:'CNY':'symbol':'1.0-0' }}</span>
+        <div class="head-meta">
+          <span class="reserve">申请准备金 {{ claim.reserve | currency:'CNY':'symbol':'1.0-0' }}</span>
+          <span class="batch-ref">依据批次 <code>{{ claim.baselineBatchNo || '—' }}</code></span>
+        </div>
       </div>
+
+      <mat-card class="invalidate-banner" *ngIf="firstInvalidatedRole(claim) as firstRole">
+        <mat-icon>warning</mat-icon>
+        <div>
+          <strong>会签已失效，需从首个受影响档位重签</strong>
+          <p>批次变更导致已完成会签作废，请从「{{ firstRole }}」开始按档位顺序重新会签；后续档位已一并退回待处理。</p>
+        </div>
+      </mat-card>
 
       <div class="review-grid">
         <section class="panel">
@@ -38,14 +49,15 @@ import { StatusChipComponent } from '../shared/status-chip.component'
               <ng-template matStepLabel>
                 <strong>{{ step.role }}</strong>
                 <span class="threshold">触发阈值 {{ step.threshold | currency:'CNY':'symbol':'1.0-0' }}</span>
+                <app-status-chip *ngIf="step.invalidated" label="已失效 · 待重签" tone="warn" />
               </ng-template>
               <div class="step-body">
                 <p>{{ step.comment || (step.status === '待处理' ? '等待当前审核人处理。' : step.status + '。') }}</p>
-                <small *ngIf="step.operator">{{ step.operator }} · {{ step.completedAt }}</small>
+                <small *ngIf="step.operator">{{ step.operator }} · {{ step.completedAt }} · 批次 {{ step.signedBatchNo || '—' }}</small>
                 <div class="step-actions" *ngIf="step.status === '待处理'">
                   <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>审批意见</mat-label><input matInput [(ngModel)]="comments[index]" /></mat-form-field>
-                  <button mat-flat-button color="primary" [disabled]="!comments[index]?.trim()" (click)="decide(claim.id, step.role, '已通过', index)">通过</button>
-                  <button mat-stroked-button color="warn" [disabled]="!comments[index]?.trim()" (click)="decide(claim.id, step.role, '退回补件', index)">退回补件</button>
+                  <button mat-flat-button color="primary" [disabled]="!comments[index]?.trim()" (click)="decide(claim, step.role, '已通过', index)">通过</button>
+                  <button mat-stroked-button color="warn" [disabled]="!comments[index]?.trim()" (click)="decide(claim, step.role, '退回补件', index)">退回补件</button>
                 </div>
               </div>
             </mat-step>
@@ -85,11 +97,19 @@ import { StatusChipComponent } from '../shared/status-chip.component'
     </section>
   `,
   styles: [`
+    .head-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
     .reserve { padding: 10px 14px; border-left: 3px solid #2f8191; background: #eaf4f5; color: #175866; font-weight: 800; }
+    .batch-ref { color: #4a6b74; font-size: 12px; }
+    .batch-ref code { padding: 1px 6px; background: #eaf2f4; border-radius: 4px; color: #175866; }
+    .invalidate-banner { display: flex; gap: 10px; margin-bottom: 14px; padding: 14px 16px; border-color: #ce743e; background: #fff7f1; }
+    .invalidate-banner mat-icon { color: #ce743e; }
+    .invalidate-banner strong { color: #984313; }
+    .invalidate-banner p { margin: 4px 0 0; color: #7a5a48; font-size: 12px; }
     .review-grid { display: grid; grid-template-columns: minmax(0,1fr) 360px; gap: 14px; align-items: start; }
     .approval-stepper { padding: 18px 22px 22px 8px; background: transparent; }
     mat-step strong, mat-step .threshold { display: block; }
     .threshold { margin-top: 3px; color: #78858d; font-size: 10px; }
+    mat-step app-status-chip { margin-top: 4px; }
     .step-body { padding: 4px 0 16px; }
     .step-body p { margin: 0 0 6px; color: #58666f; }
     .step-body small { color: #869198; }
@@ -105,7 +125,7 @@ import { StatusChipComponent } from '../shared/status-chip.component'
     .disputes > div { display: flex; gap: 9px; padding: 10px 0; border-bottom: 1px solid #edf0f2; color: #437360; }
     .disputes > div.disputed { color: #b55a2e; }
     .disputes strong { font-size: 12px; }
-    .disputes p { margin: 5px 0 0; color: #6d7981; font-size: 11px; line-height: 1.5; }
+    .disputes p { margin: 5px 0 0; color: #6d7981; font-size: 11px; line-height: 1.55; }
     @media (max-width: 1050px) { .review-grid { grid-template-columns: 1fr; } }
   `],
 })
@@ -121,25 +141,40 @@ export class ReviewPageComponent {
     this.claim$ = this.store.select(selectSelectedClaim)
   }
 
-  planA(claim: any) {
-    return claim.lossItems.reduce((sum: number, item: any) => sum + Math.max(0, (item.repairQuotes.at(-1)?.amount ?? 0) - item.salvage) * item.liability, 0) - claim.deductible
+  planA(claim: ClaimCase) {
+    return claim.lossItems.reduce((sum, item) => sum + Math.max(0, (item.repairQuotes.at(-1)?.amount ?? 0) - item.salvage) * item.liability, 0) - claim.deductible
   }
 
-  planB(claim: any) {
-    return this.planA(claim) - (claim.lossItems.filter((item: any) => item.disputed).length * 72000)
+  planB(claim: ClaimCase) {
+    return this.planA(claim) - claim.lossItems.filter((item) => item.disputed).length * 72000
   }
 
-  disputedCount(claim: any) {
-    return claim.lossItems.filter((item: any) => item.disputed).length
+  disputedCount(claim: ClaimCase) {
+    return claim.lossItems.filter((item) => item.disputed).length
   }
 
-  decide(claimId: string, role: string, result: string, index: number) {
+  /** 首个待重签档位：存在失效会签时返回其角色 */
+  firstInvalidatedRole(claim: ClaimCase): string {
+    const first = claim.approvals.find((step) => step.invalidated)
+    return first ? first.role : ''
+  }
+
+  decide(claim: ClaimCase, role: string, result: string, index: number) {
     const comment = this.comments[index]?.trim()
     if (!comment) return
-    this.service.approve(claimId, { role, result, comment }).subscribe(() => {
-      this.store.select(selectSelectedClaim).subscribe((claim) => this.store.dispatch(updateClaim({ claim: structuredClone(claim) })))
-      this.snackBar.open(result === '已通过' ? '会签通过，已流转至下一级' : '案件已退回补件，原始记录未修改', '关闭', { duration: 2200 })
-      this.comments[index] = ''
+    this.service.approve(claim.id, { role, result, comment, batchNo: claim.baselineBatchNo ?? '' }).subscribe({
+      next: (res) => {
+        if (res.ok && res.claim) {
+          this.store.dispatch(updateClaim({ claim: res.claim }))
+          this.snackBar.open(result === '已通过' ? `会签通过（依据批次 ${claim.baselineBatchNo}），已流转至下一级` : '案件已退回补件，原始记录未修改', '关闭', { duration: 2200 })
+          this.comments[index] = ''
+        }
+      },
+      error: (err: any) => {
+        if (err.status === 409 && err.error?.firstRole) {
+          this.snackBar.open(`请从首个受影响档位重签：${err.error.firstRole}`, '关闭', { duration: 2600 })
+        }
+      },
     })
   }
 }

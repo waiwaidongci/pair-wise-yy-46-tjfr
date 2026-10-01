@@ -46,6 +46,28 @@ import { StatusChipComponent } from '../shared/status-chip.component'
 
         <aside>
           <section class="panel">
+            <div class="panel-head"><h3>基线批次</h3><span class="muted">提交时连科目/准备金/附件/会签一起</span></div>
+            <div class="batch-list">
+              <article *ngFor="let batch of (claim.batches ?? []).slice().reverse()">
+                <div class="batch-head">
+                  <mat-icon>inventory_2</mat-icon>
+                  <strong>{{ batch.batchNo }}</strong>
+                  <app-status-chip [label]="batch.status" [tone]="batch.status === '已提交' ? 'good' : 'default'" />
+                  <small>V{{ batch.version }} · {{ batch.createdBy }} · {{ batch.createdAt }}</small>
+                </div>
+                <ul class="batch-changes" *ngIf="batch.changes.length">
+                  <li *ngFor="let change of batch.changes">{{ change }}</li>
+                </ul>
+                <p class="batch-empty" *ngIf="batch.changes.length === 0">初始基线版本，原记录保留可查。</p>
+                <p class="batch-invalidated" *ngIf="batch.invalidatedApprovals.length">
+                  <mat-icon>warning</mat-icon> 失效会签档位：{{ batch.invalidatedApprovals.join('、') }}（从首个受影响档位重签）
+                </p>
+              </article>
+              <p class="batch-empty" *ngIf="(claim.batches ?? []).length === 0">旧数据无批次号，保存时补初始版本。</p>
+            </div>
+          </section>
+
+          <section class="panel">
             <div class="panel-head"><h3>附件版本</h3><span class="muted">只增不删</span></div>
             <div class="file-list">
               <div *ngFor="let item of claim.lossItems">
@@ -91,6 +113,18 @@ import { StatusChipComponent } from '../shared/status-chip.component'
     .draft-card { padding: 16px; }
     .draft-card > div { display: flex; align-items: center; gap: 8px; }
     .draft-card p { margin: 9px 0 12px; color: #69767f; font-size: 12px; line-height: 1.55; }
+    .batch-list { display: grid; gap: 10px; padding: 12px 14px 16px; }
+    .batch-list article { padding: 10px 12px; background: #f5f7f7; border: 1px solid #e3ebed; border-radius: 7px; }
+    .batch-head { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+    .batch-head mat-icon { font-size: 16px; width: 16px; height: 16px; color: #2c7f89; }
+    .batch-head strong { font-size: 13px; }
+    .batch-head small { color: #8b969d; font-size: 10px; }
+    .batch-changes { margin: 8px 0 0; padding: 0; list-style: none; }
+    .batch-changes li { position: relative; padding: 3px 0 3px 12px; color: #56656e; font-size: 11px; line-height: 1.5; }
+    .batch-changes li::before { content: ''; position: absolute; left: 0; top: 9px; width: 4px; height: 4px; border-radius: 50%; background: #2c7f89; }
+    .batch-invalidated { display: flex; gap: 5px; align-items: flex-start; margin: 8px 0 0; color: #984313; font-size: 11px; }
+    .batch-invalidated mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .batch-empty { margin: 6px 0 0; color: #8b969d; font-size: 11px; }
     @media (max-width: 1050px) { .audit-grid { grid-template-columns: 1fr; } }
   `],
 })

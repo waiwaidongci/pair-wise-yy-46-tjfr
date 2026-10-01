@@ -1,6 +1,6 @@
 import { HttpClient, HttpParams } from '@angular/common/http'
 import { Injectable } from '@angular/core'
-import type { ClaimCase, ClaimFilters, PagedClaims } from './models'
+import type { BatchCommitBody, BatchCommitResult, ClaimCase, ClaimFilters, PagedClaims } from './models'
 
 @Injectable({ providedIn: 'root' })
 export class ClaimsService {
@@ -20,11 +20,17 @@ export class ClaimsService {
     return this.http.get<ClaimCase>(`/api/claims/${id}`)
   }
 
-  addQuote(claimId: string, body: { itemId: string; amount: number; reason: string }) {
-    return this.http.post(`/api/claims/${claimId}/quotes`, body)
+  /** 调整报价或责任比例前先取批次号 */
+  openBatch(claimId: string) {
+    return this.http.post<{ batchNo: string; version: number; claimId: string }>(`/api/claims/${claimId}/batches`, {})
   }
 
-  approve(claimId: string, body: { role: string; result: string; comment: string }) {
-    return this.http.post(`/api/claims/${claimId}/approvals`, body)
+  /** 保存批次：损失科目、准备金、附件版本、会签状态一起提交；requestId 用于失败后按编号重试 */
+  commitBatch(claimId: string, body: BatchCommitBody) {
+    return this.http.post<BatchCommitResult>(`/api/claims/${claimId}/batches/${body.batchNo}/commit`, body)
+  }
+
+  approve(claimId: string, body: { role: string; result: string; comment: string; batchNo: string }) {
+    return this.http.post<{ ok: boolean; claim: ClaimCase; error?: string; firstRole?: string }>(`/api/claims/${claimId}/approvals`, body)
   }
 }
