@@ -103,8 +103,11 @@ import { selectAllClaims, selectFilters, selectFilteredClaims, selectClaim, setF
                 </td>
               </ng-container>
               <ng-container matColumnDef="reserve">
-                <th mat-header-cell *matHeaderCellDef>准备金</th>
-                <td mat-cell *matCellDef="let claim">{{ claim.reserve | currency:'CNY':'symbol':'1.0-0' }}</td>
+                <th mat-header-cell *matHeaderCellDef>准备金 / 批次</th>
+                <td mat-cell *matCellDef="let claim">
+                  <strong>{{ claim.reserve | currency:'CNY':'symbol':'1.0-0' }}</strong>
+                  <small>{{ claim.batchNo }} · V{{ claim.batchVersion }}</small>
+                </td>
               </ng-container>
               <ng-container matColumnDef="risk">
                 <th mat-header-cell *matHeaderCellDef>风险</th>

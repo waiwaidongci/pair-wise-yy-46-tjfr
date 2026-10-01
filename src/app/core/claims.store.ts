@@ -1,6 +1,7 @@
 import { createAction, createReducer, createSelector, on, props } from '@ngrx/store'
 import { seedClaims } from './seed'
-import type { ClaimCase, ClaimFilters } from './models'
+import { normalizeClaim } from './baseline'
+import type { ClaimCase, ClaimFilters, LegacyClaim } from './models'
 
 export type ClaimsState = {
   items: ClaimCase[]
@@ -14,19 +15,36 @@ export type ClaimsState = {
 
 export type AppState = { claims: ClaimsState }
 
-const persisted = localStorage.getItem('property-claims-draft-v1')
-
-export const initialClaimsState: ClaimsState = persisted
-  ? JSON.parse(persisted)
-  : {
-      items: structuredClone(seedClaims),
-      filters: { query: '', status: '', risk: '', page: 1, pageSize: 10 },
-      total: seedClaims.length,
-      selectedId: seedClaims[0].id,
-      loading: false,
-      draft: '待补充房屋檩条第三方复测依据。',
-      toast: '',
+function loadInitialState(): ClaimsState {
+  const fallbackSeed = (seedClaims as LegacyClaim[]).map(normalizeClaim)
+  const stored = localStorage.getItem('property-claims-draft-v1')
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored) as ClaimsState
+      if (Array.isArray(parsed.items) && parsed.items.length) {
+        return {
+          ...parsed,
+          items: parsed.items.map((item) => normalizeClaim(item as LegacyClaim)),
+          toast: '',
+        }
+      }
+    } catch {
+      // 旧草稿结构不兼容时回落到种子数据。
     }
+  }
+
+  return {
+    items: fallbackSeed,
+    filters: { query: '', status: '', risk: '', page: 1, pageSize: 10 },
+    total: fallbackSeed.length,
+    selectedId: fallbackSeed[0].id,
+    loading: false,
+    draft: '待补充房屋檩条第三方复测依据。',
+    toast: '',
+  }
+}
+
+export const initialClaimsState: ClaimsState = loadInitialState()
 
 export const loadClaimsSuccess = createAction('[Claims] Load Success', props<{ items: ClaimCase[]; total: number }>())
 export const setFilters = createAction('[Claims] Set Filters', props<{ filters: Partial<ClaimFilters> }>())

@@ -1,6 +1,6 @@
-import type { ClaimCase } from './models'
+import type { LegacyClaim } from './models'
 
-export const seedClaims: ClaimCase[] = [
+export const seedClaims: LegacyClaim[] = [
   {
     id: 'CLM-2026-0918',
     policyNo: 'PICC-PROP-882019',
